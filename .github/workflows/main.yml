@@ -1,24 +1,51 @@
-name: CI Pipeline
+name: Web App Demo CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
-  build:
+  build-test-scan:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 18
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: Install dependencies
-      run: npm install
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Build project
-      run: npm run build
+      - name: Run Unit Tests (Pytest)
+        run: pytest -v
+
+      - name: Run Security Scan (Bandit)
+        run: bandit -r .
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-test-scan
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/gp1-demo:latest .
+
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/gp1-demo:latest
